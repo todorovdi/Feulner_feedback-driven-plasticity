@@ -30,17 +30,17 @@ The main steps of running a full experiment are the following
 - `dataset.py`: handles everything related to data generation
 - `modeldef.py`: defines RNN model 
 
-**Simulation scripts (should be executed in the given order):**
+**Simulation scripts (should be executed in the following order):**
 
-- `setup_parameters.py`
-- `setup_OFC_network.py`
-- `adaptation_learning.py`
+1. `setup_parameters.py` This is used to set all parameters for the experiment. It creates a param.npy file in the respective experiment folder. 
+2. `setup_OFC_network.py` This runs the initial training of the model on a constructed random reach dataset.
+3. `adaptation_learning.py` This simulates rapid learning by feedback-driven plasticity of the recurrent connections in the RNN.
 
 **Extra:**
 
-* `paper.py`: can be used to automatise experiments
+* `paper.py` This can be used to automatise experiments.
 
 ## Requirements
 
-Python3, pytorch, ...
+Python3 and PyTorch.
 
