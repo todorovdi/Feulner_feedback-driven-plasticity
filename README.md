@@ -1,7 +1,7 @@
 <p align="center">
     <img src="logo.png" alt="Logo" width=1875>
 
-  <h1 align="left">Sensory feedback can drive adaptation in motor cortex and facilitate generalization</h1>
+  <h1 align="left">Motor control can guide rapid learning through feedback-driven plasticity</h1>
 
 Barbara Feulner, Matthew G. Perich, Lee E. Miller, Claudia Clopath, Juan A. Gallego
 
