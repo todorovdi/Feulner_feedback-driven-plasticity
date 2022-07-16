@@ -1,0 +1,46 @@
+<p align="center">
+    <img src="logo.png" alt="Logo" width=1875>
+
+  <h1 align="left">Sensory feedback can drive adaptation in motor cortex and facilitate generalization</h1>
+
+Barbara Feulner, Matthew G. Perich, Lee E. Miller, Claudia Clopath, Juan A. Gallego
+
+
+
+
+## Table of contents
+
+- [Quick start](#quick-start)
+- [What's included](#whats-included)
+- [Requirements](#requirements)
+
+
+## Quick start
+
+The main steps of running a full experiment are the following
+
+- Setting up all parameters of the model [code](setup_parameters.py)
+- Initial training on random reaches [code](setup_OFC_network.py)
+- Adaptation to VR perturbation with feedback-driven plasticity rule [code](adaptation_learning.py)
+
+## What's included
+
+**Toolbox scripts:**
+
+- `dataset.py`: handles everything related to data generation
+- `modeldef.py`: defines RNN model 
+
+**Simulation scripts (should be executed in the given order):**
+
+- `setup_parameters.py`
+- `setup_OFC_network.py`
+- `adaptation_learning.py`
+
+**Extra:**
+
+* `paper.py`: can be used to automatise experiments
+
+## Requirements
+
+Python3, pytorch, ...
+
