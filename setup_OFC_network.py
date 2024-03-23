@@ -1,10 +1,7 @@
 #!/usr/bin/env python3 3.7.4 project3 env
 # -*- coding: utf-8 -*-
 """
-Run whole simulation for network model.
-
-    - initial training on random reach data (following what's defined in protocol')
-    - biologically plausible adaptation run
+Runs initial training of network model.
 """
 
 import numpy as np

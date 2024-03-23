@@ -70,10 +70,6 @@ class RNN(nn.Module):
     # BIOLOGICALLY PLAUSIBLE LEARNING RULE
     def dW(self,pre,post,lr,inp,fb,presum):
         with torch.no_grad():
-            # return self.alpha*0.1*(-self.rnn.weight_hh_l0
-            #                 + lr*torch.outer(fb@(self.mask.weight*self.feedback.weight).T,presum)
-            #                 + w0)
-            
             return self.alpha*0.1*(
                 + lr*self.mask2.weight*torch.outer(fb@(self.mask.weight*self.feedback.weight).T,presum)
                 )
@@ -87,7 +83,6 @@ class RNN(nn.Module):
             return self.output(testl1)
         
     # SIMULATE MOTOR NOISE (scales with velocity output)
-    # TODO check this
     def create_noise(self,testl1):
         # time varying noise
         tmp = self.noiseout*torch.randn(testl1.shape[1],testl1.shape[0],2)
@@ -100,7 +95,6 @@ class RNN(nn.Module):
         return noise
     
     # RUN MODEL
-    # TODO check that delays are working as expected
     def forward(self, X, Xpert, lr=1e-3, popto=None):
         self.batch_size = X.size(1)
         hidden0 = self.init_hidden()
@@ -142,9 +136,6 @@ class RNN(nn.Module):
                 if self.biolearning and j%5:
                     dw_acc += self.dW(x1[0],r1[0],lr,X[j,0],
                                       poserr[j-self.delay][0],presum[0])
-                    # with torch.no_grad(): # online updating -> didn't test this extensively yet
-                    #     self.rnn.weight_hh_l0 += self.dW(x1[0],r1[0],lr,X[j,0],
-                    #                   poserr[j-self.delay][0],presum[0])
             if self.biolearning:
                 presum += r1
             hidden1.append(r1)
@@ -160,23 +151,13 @@ class RNN(nn.Module):
             return poserr[(self.fwd_delay):], hidden1[:(-self.fwd_delay)]
 
 
-
-# NON-MODULE SPECIFIC
 def run_model(model,params,data,fb=True,dopert=0):
     if not fb:
         state_dict = model.state_dict()
         save = state_dict['feedback.weight'].detach().clone()
         state_dict['feedback.weight'] *= 0
         model.load_state_dict(state_dict)
-    # if dopert==2:
-    #     rot_phi = params['model']['rot_phi']
-    #     rotmat = np.array([[np.cos(rot_phi),-np.sin(rot_phi)],
-    #                        [np.sin(rot_phi),np.cos(rot_phi)]])
-    #     state_dict = model.state_dict()
-    #     state_dict['output.weight'] = torch.FloatTensor(rotmat) @ \
-    #                                         state_dict['output.weight']
-    #     model.load_state_dict(state_dict, strict=True)
-        
+
     from dataset import perturb
     # SETUP ############
     testdata = data['test_set']
@@ -255,7 +236,6 @@ def test(model,data,params,savname,lc,dopert,dataC):
     plt.plot(lc)
     plt.ylabel('Loss')
     plt.xlabel('Training epochs')
-    # add VAF as title
     velT = result['target']
     vel = result['output']
     posT = get_pos(velT)
@@ -266,12 +246,10 @@ def test(model,data,params,savname,lc,dopert,dataC):
     plt.subplot(3,2,3)
     plt.plot(result['target'][idx],label='Target')
     plt.plot(result['output'][idx],'--',label='Produced')
-    # plt.legend()
     plt.ylabel('Output')
     
     plt.subplot(3,2,4)
     model_wFB = run_model(model,params,dataC)
-    # model_rot = run_model(model,params,dataC,dopert=2)
     model_woFB = run_model(model,params,dataC,fb=False)
     tid = model_woFB['tid']
     
@@ -280,9 +258,6 @@ def test(model,data,params,savname,lc,dopert,dataC):
     
     plot_traj(model_woFB,tid,xoffset=30)
     plt.text(30,10,'woFB',ha='center')
-    
-    # plot_traj(model_rot,tid,xoffset=30)
-    # plt.text(30,10,'ROT',ha='center')
     
     plt.xlim(-8,38)
     plt.ylim(-18,18)

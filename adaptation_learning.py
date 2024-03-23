@@ -1,10 +1,7 @@
 #!/usr/bin/env python3 3.7.4 project3 env
 # -*- coding: utf-8 -*-
 """
-Load initially trained network model and run adaptation algorithm.
-
-    - biologically plausible learning rule
-    - gradient descent (backprop)
+Load initially trained network and run adaptation experiment.
 """
 
 import numpy as np
@@ -29,16 +26,16 @@ def main(name='test',backprop=False, control=False, single_target=False,
  
     # ADAPTATION PARAMETERS #############
     if not backprop:
-        lr = 1e-5 # N=600 -> 5e-6 N=400 -> 1e-5
+        lr = 1e-5
         batch_size = 1
         if control:
-            ntrials = 210 # training trials
+            ntrials = 210
         elif popto:
             ntrials = 100
         elif rot_sd != 0:
             ntrials = 160
         else:
-            ntrials = 300 # training trials
+            ntrials = 300
     else:
         lr = 5e-5
         ntrials = 100
@@ -63,9 +60,9 @@ def main(name='test',backprop=False, control=False, single_target=False,
         
     if not os.path.exists(savname):
         os.mkdir(savname)
-    # else:
-    #     print('There is already an adaptation simulation!')
-    #     return 0
+    else:
+        print('There is already an adaptation simulation!')
+        return 0
     
     # SETUP SIMULATION #################
     rand_seed = params['model']['rand_seed']
@@ -77,50 +74,27 @@ def main(name='test',backprop=False, control=False, single_target=False,
         dtype = torch.cuda.FloatTensor
     else:
         dtype = torch.FloatTensor
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
     # SETUP MODEL #################
-    try:
-        model = RNN(params['model']['input_dim'],
-                    params['model']['output_dim'],
-                    params['model']['n'],
-                    params['model']['dt']/params['model']['tau'],
-                    dtype,
-                    params['model']['dt'],
-                    params['model']['fwd_delay'],
-                    params['model']['fb_delay'],
-                    fb_sparsity=params['model']['fb_sparsity'],
-                    nonlin=params['model']['nonlin'],
-                    noiseout=params['model']['noise_amp'],
-                    noise_kernel_size=params['model']['noise_kernel_size'],
-                    noisein=params['model']['noise_stim_amp'],
-                    rec_sparsity=params['model']['rec_sparsity'])
-    except:
-        model = RNN(params['model']['input_dim'],
-                    params['model']['output_dim'],
-                    params['model']['n'],
-                    params['model']['dt']/params['model']['tau'],
-                    dtype,
-                    params['model']['dt'],
-                    params['model']['fwd_delay'],
-                    params['model']['fb_delay'],
-                    fb_sparsity=params['model']['fb_sparsity'],
-                    nonlin=params['model']['nonlin'],
-                    noiseout=params['model']['noise_amp'],
-                    noise_kernel_size=params['model']['noise_kernel_size'],
-                    noisein=params['model']['noise_stim_amp'])
-    
+    model = RNN(params['model']['input_dim'],
+                params['model']['output_dim'],
+                params['model']['n'],
+                params['model']['dt']/params['model']['tau'],
+                dtype,
+                params['model']['dt'],
+                params['model']['fwd_delay'],
+                params['model']['fb_delay'],
+                fb_sparsity=params['model']['fb_sparsity'],
+                nonlin=params['model']['nonlin'],
+                noiseout=params['model']['noise_amp'],
+                noise_kernel_size=params['model']['noise_kernel_size'],
+                noisein=params['model']['noise_stim_amp'],
+                rec_sparsity=params['model']['rec_sparsity'])
+
     if dtype == torch.cuda.FloatTensor:
         model = model.cuda()
-    try:
-        model.load_state_dict(dataT['model_state_dict'])
-    except:
-        mask2 = nn.Linear(params['model']['n'], params['model']['n'], bias=False) 
-        mask2.weight = nn.Parameter((torch.ones(params['model']['n'], 
-                                                params['model']['n'])).float()).type(dtype)
-        mask2.weight.requires_grad = False
-        dataT['model_state_dict'].update({'mask2.weight':mask2.weight})
-        model.load_state_dict(dataT['model_state_dict'])
+    
+    model.load_state_dict(dataT['model_state_dict'])
     
     # set some weights static
     model.output.weight.requires_grad = False 
@@ -190,10 +164,6 @@ def main(name='test',backprop=False, control=False, single_target=False,
                                 state_dict['output.weight']
     model.load_state_dict(state_dict, strict=True)
     
-    # # INITIAL TEST ######################
-    # test(model,data,params,savname+'phase0_',[],
-    #                   dopert=0,dataC=data)
-
     # START ADAPTATION #################
     lc = []
     model.train()
@@ -204,7 +174,7 @@ def main(name='test',backprop=False, control=False, single_target=False,
     errs = []
     rot_phi = np.random.randn(ntrials)*rot_sd/180*np.pi+params['model']['rot_phi']
     for epoch in range(ntrials): 
-        # add rotation variance
+        # add rotation variability
         if rot_sd!=0:
             rotmat = np.array([[np.cos(rot_phi[epoch]),-np.sin(rot_phi[epoch])],
                                [np.sin(rot_phi[epoch]),np.cos(rot_phi[epoch])]])

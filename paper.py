@@ -1,7 +1,10 @@
 #!/usr/bin/env python3 3.7.4 project3 env
 # -*- coding: utf-8 -*-
 """
-Run all scripts necessary to reproduce the paper.
+Run all scripts necessary for full simulation.
+    1) setup parameters
+    2) initial training
+    3) adaptation experiment
 """
 import setup_parameters 
 import setup_OFC_network

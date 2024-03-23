@@ -22,28 +22,28 @@ def main(name='test',fb_sparsity=1.,rand_seed=0):
         
     # MODEL #################################
     # neuron
-    n = 400 # other tested so far: 600, 800
+    n = 400
     tau = 0.05
     nonlin = 'relu'
     grec = 0 # initialize recurrent weights in chaotic regime?
     fb_initial = 1 # initialize feedback weights smaller or larger?
     in_initial = 1 # initialize input weights smaller or larger?
     fb_sparsity = fb_sparsity # sparseness of feedback signal
-    rec_sparsity = 1. # other tested so far: 0.5, 0.8
-    fb_type = 'poserrorfb' # not really used anymore -> position error fixed now
+    rec_sparsity = 1.
+    fb_type = 'poserrorfb'
     model_input_dim = 3
     model_output_dim = 2
     
     # signal delays
-    fwd_delay = 2#0
-    fb_delay = 10#5
+    fwd_delay = 2
+    fb_delay = 10
     
     # input noise: trial-to-trial variability (not time-dependent)
-    noise_stim_amp = 0#.05#0.1
+    noise_stim_amp = 0
     
     # output noise (velocity dependent)
-    noise_amp = 0#0.1
-    noise_kernel_size = 5 # how smooth?
+    noise_amp = 0
+    noise_kernel_size = 5
     
     # VR perturbation
     rot_phi = 30/180*np.pi
