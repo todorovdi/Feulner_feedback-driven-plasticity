@@ -6,13 +6,14 @@ Defines experiment parameters.
 
 import numpy as np
 import os,shutil
+from pathlib import Path
 
 def main(name='test',rand_seed=0):
     
     # NAME #################################
-    directory = 'results/'
+    directory = Path.cwd() / 'results'
     name = name
-    savname = directory + name
+    savname = directory / name
     
     if not os.path.exists(savname):
         os.mkdir(savname)
@@ -167,8 +168,8 @@ def main(name='test',rand_seed=0):
     
     params = {'model':model,'data':data,'directory':directory,'name':name,
               'p1':p1}
-    np.save(savname+'/params',params)
-    shutil.copy(__file__, savname+'/'+__file__.split('/')[-1]) 
+    np.save(savname / 'params',params)
+    shutil.copy(__file__, savname / 'setup_parameters.py') 
     
 if __name__ == "__main__":
     main()

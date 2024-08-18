@@ -42,5 +42,5 @@ The main steps of running a full experiment are the following
 
 ## Requirements
 
-Python3 and PyTorch.
-
+The original work was using Python 3.7.4 and PyTorch 1.8.1.  
+The code here was updated to work with Python 3.11.5 and PyTorch 2.3.1.

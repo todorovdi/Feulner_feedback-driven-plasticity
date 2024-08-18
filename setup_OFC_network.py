@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from collections import OrderedDict
+from pathlib import Path
 from dataset import create_data_velocity_centeroutreach, \
                     create_data_velocity_random, \
                         perturb
@@ -17,11 +18,11 @@ from modeldef import RNN,test
 def main(name='test'):
     
     # LOAD PARAMETERS ###################
-    directory = 'results/'
+    directory = Path.cwd() / 'results'
     name = name
-    savname = directory + name +'/'
+    savname = directory / name
         
-    params = np.load(savname+'params.npy',allow_pickle=True).item()
+    params = np.load(savname / 'params.npy',allow_pickle=True).item()
     protocol = params['model']['protocol']
     
     if directory!=params['directory'] or name!=params['name']:
@@ -37,8 +38,10 @@ def main(name='test'):
     # GPU usage 
     if torch.cuda.is_available():
         dtype = torch.cuda.FloatTensor
+        torch.set_default_device('cuda')
     else:
         dtype = torch.FloatTensor
+        torch.set_default_device('cpu')
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
     params['model'].update({'dtype':dtype,'device':device})
@@ -65,9 +68,6 @@ def main(name='test'):
                 noise_kernel_size=params['model']['noise_kernel_size'],
                 noisein=params['model']['noise_stim_amp'],
                 rec_sparsity=params['model']['rec_sparsity'])
-    
-    if dtype == torch.cuda.FloatTensor:
-        model = model.cuda()
        
     # recurrent initialization
     if params['model']['grec']!=0:
@@ -95,7 +95,7 @@ def main(name='test'):
             tmp['feedback.weight'] *= params['model']['fb_initial']
             model.load_state_dict(tmp,strict=True)
             model.feedback.weight.requires_grad = False
-            np.save(savname+'data',data0)
+            np.save(savname / 'data',data0)
         else:
             model.feedback.weight.requires_grad = True
         data = data0[protocol[phase][0]]
@@ -109,7 +109,7 @@ def main(name='test'):
             rotmat = np.array([[np.cos(rot_phi),-np.sin(rot_phi)],
                                 [np.sin(rot_phi),np.cos(rot_phi)]])
             state_dict = model.state_dict()
-            state_dict['output.weight'] = torch.FloatTensor(rotmat) @ \
+            state_dict['output.weight'] = dtype(rotmat) @ \
                                             state_dict['output.weight']
             model.load_state_dict(state_dict, strict=True)
         # convert to pytorch form
@@ -174,11 +174,11 @@ def main(name='test'):
                     'optimizer_state_dict': optimizer.state_dict(),
                     'lc':np.array(lc),
                     'params':params
-                    }, savname+'phase'+str(phase)+'_training')
+                    }, savname / ('phase'+str(phase)+'_training'))
         print('MODEL TRAINED!')
         # test model
         model.eval()
-        test(model,data,params,savname+'phase'+str(phase)+'_',lc,
+        test(model,data,params,str(savname / ('phase'+str(phase)+'_')),lc,
                       dopert=0 if perturbation==2 else perturbation,
                       dataC=dataB)
         print('MODEL TESTED!')

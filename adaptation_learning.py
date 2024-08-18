@@ -11,18 +11,19 @@ import torch.optim as optim
 from collections import OrderedDict
 from modeldef import RNN,test
 import os
+from pathlib import Path
 
 def main(name='test',backprop=False, control=False, single_target=False,
              popto=False, popto_param=None, rot_sd=0):
     
     # LOAD PARAMETERS ###################
-    directory = 'results/'
+    directory = Path.cwd() / 'results'
     name = name
-    savname = directory + name +'/'
+    savname = directory / name
         
-    dataT = torch.load(savname+'phase3_training')
-    data = np.load(savname+'data.npy',allow_pickle=True).item()['center-out-reach']
-    params = np.load(savname+'params.npy',allow_pickle=True).item()
+    dataT = torch.load(savname / 'phase3_training')
+    data = np.load(savname / 'data.npy',allow_pickle=True).item()['center-out-reach']
+    params = np.load(savname / 'params.npy',allow_pickle=True).item()
  
     # ADAPTATION PARAMETERS #############
     if not backprop:
@@ -48,13 +49,13 @@ def main(name='test',backprop=False, control=False, single_target=False,
     
     if not control:
         if single_target:
-            savname += 'AD_singletarget/'
+            savname = savname / 'AD_singletarget'
         elif popto:
-            savname += 'AD_popto_'+popto_param['name']+'/'
+            savname = savname / 'AD_popto_'+popto_param['name']
         elif rot_sd!=0:
-            savname += ('AD_rotsd%d/'%rot_sd)
+            savname = savname / ('AD_rotsd%d'%rot_sd)
         else:
-            savname += 'AD/'
+            savname = savname / 'AD'
     else:
         savname += 'AD_ctrl/'
         
@@ -72,9 +73,11 @@ def main(name='test',backprop=False, control=False, single_target=False,
     # GPU usage 
     if torch.cuda.is_available():
         dtype = torch.cuda.FloatTensor
+        torch.set_default_device('cuda')
     else:
         dtype = torch.FloatTensor
-    
+        torch.set_default_device('cpu')
+   
     # SETUP MODEL #################
     model = RNN(params['model']['input_dim'],
                 params['model']['output_dim'],
@@ -90,9 +93,6 @@ def main(name='test',backprop=False, control=False, single_target=False,
                 noise_kernel_size=params['model']['noise_kernel_size'],
                 noisein=params['model']['noise_stim_amp'],
                 rec_sparsity=params['model']['rec_sparsity'])
-
-    if dtype == torch.cuda.FloatTensor:
-        model = model.cuda()
     
     model.load_state_dict(dataT['model_state_dict'])
     
@@ -160,7 +160,7 @@ def main(name='test',backprop=False, control=False, single_target=False,
                        [np.sin(rot_phi),np.cos(rot_phi)]])
     state_dict = model.state_dict()
     save_state_dict = state_dict['output.weight'].detach().clone()
-    state_dict['output.weight'] = torch.FloatTensor(rotmat) @ \
+    state_dict['output.weight'] = dtype(rotmat) @ \
                                 state_dict['output.weight']
     model.load_state_dict(state_dict, strict=True)
     
@@ -178,7 +178,7 @@ def main(name='test',backprop=False, control=False, single_target=False,
         if rot_sd!=0:
             rotmat = np.array([[np.cos(rot_phi[epoch]),-np.sin(rot_phi[epoch])],
                                [np.sin(rot_phi[epoch]),np.cos(rot_phi[epoch])]])
-            state_dict['output.weight'] = torch.FloatTensor(rotmat) @ \
+            state_dict['output.weight'] = dtype(rotmat) @ \
                                         save_state_dict.clone()
             model.load_state_dict(state_dict, strict=True)
         toprint = OrderedDict()
@@ -252,7 +252,7 @@ def main(name='test',backprop=False, control=False, single_target=False,
                     'popto_param':popto_param,
                     'popto_perturbed':perturbed if popto else 0,
                     'rot_phi':rot_phi
-                    }, savname+'phase_training')#+'_'+str(popto_param['Npert'])+
+                    }, savname / 'phase_training')#+'_'+str(popto_param['Npert'])+
                                                 # '_'+str(popto_param['pamp']))
     else:
         torch.save({
@@ -267,11 +267,11 @@ def main(name='test',backprop=False, control=False, single_target=False,
                     'popto_param':popto_param,
                     'popto_perturbed':perturbed if popto else 0,
                     'rot_phi':rot_phi
-                    }, savname+'phase_training')
+                    }, savname / 'phase_training')
     print('MODEL TRAINED!')
     
     # FINAL TEST ######################
-    test(model,data,params,savname+'phase1_',lc,
+    test(model,data,params,str(savname / 'phase1_'),lc,
                       dopert=0,dataC=data)
     print('MODEL TESTED!')
 

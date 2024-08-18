@@ -135,9 +135,9 @@ class RNN(nn.Module):
                                              popto[j])
                 if self.biolearning and j%5:
                     dw_acc += self.dW(x1[0],r1[0],lr,X[j,0],
-                                      poserr[j-self.delay][0],presum[0])
+                                      poserr[j-self.delay][0],presum[0]).detach()
             if self.biolearning:
-                presum += r1
+                presum += r1.detach()
             hidden1.append(r1)
             poserr.append(v1)
         hidden1 = torch.stack(hidden1[1:])
