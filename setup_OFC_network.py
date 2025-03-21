@@ -14,21 +14,27 @@ from dataset import create_data_velocity_centeroutreach, \
                     create_data_velocity_random, \
                         perturb
 from modeldef import RNN,test
+import os
+
+dir = os.path.expandvars('$FEULNER_FEEDBACK_PLASTICITY_DATA')
+dir = Path(dir)
 
 def main(name='test'):
     
     # LOAD PARAMETERS ###################
-    directory = Path.cwd() / 'results'
+    #directory = Path.cwd() / 'results'
+    directory = dir / 'results'
     name = name
     savname = directory / name
         
-    params = np.load(savname / 'params.npy',allow_pickle=True).item()
+    fnf_params = savname / 'params.npy'
+    print('Loading parameters from %s'%fnf_params)
+    params = np.load(fnf_params,allow_pickle=True).item()
     protocol = params['model']['protocol']
     
     if directory!=params['directory'] or name!=params['name']:
         print('Naming is inconsistent!')
         return 0 
-    
     
     # SETUP SIMULATION #################
     rand_seed = params['model']['rand_seed']
@@ -46,13 +52,11 @@ def main(name='test'):
     
     params['model'].update({'dtype':dtype,'device':device})
     
-        
     # CREATE DATA ###################
     dataA = create_data_velocity_random(params['data'])
     dataB = create_data_velocity_centeroutreach(params['data'])
     data0 = {'random':dataA,'center-out-reach':dataB}
         
-    
     # SETUP MODEL #################
     model = RNN(params['model']['input_dim'],
                 params['model']['output_dim'],
@@ -88,8 +92,12 @@ def main(name='test'):
                            lr=params['model']['lr']) 
     
     # START INITIAL TRAINING #################
+    # usually first there are several random phases and then two cetner-out-reach phases
+    # first random phase with static fb weights, then with changing fb weights, 
+    # then with random pertbation on
+    # then center-out-reach without perturbation, then with VMR perturbation 
     for phase in range(len(protocol)):
-        print('\n####### PHASE %d #######'%phase)
+        print('\n####### PHASE %d #######'%phase, protocol[phase])
         if phase==0: # fix fb weights in first training phase
             tmp = model.state_dict()
             tmp['feedback.weight'] *= params['model']['fb_initial']
@@ -98,13 +106,17 @@ def main(name='test'):
             np.save(savname / 'data',data0)
         else:
             model.feedback.weight.requires_grad = True
-        data = data0[protocol[phase][0]]
-        perturbation = protocol[phase][1]
-        training_trials = protocol[phase][2]
-        tout = data['target'][:,:,2:]
-        tstim = data['stimulus']
+
+        data_cur_phase = data0[protocol[phase][0]] # data0 is a dict with two keys: random and center-out-reach
+        #data_cur_phase is a dict with keys ['params', 'target', 'peak_speed', 'stimulus', 'test_set']
+        perturbation_type = protocol[phase][1]
+        n_training_trials = protocol[phase][2]
+        tout  = data_cur_phase['target'][:,:,2:] # target behavior, here we take only postiion info
+        tstim = data_cur_phase['stimulus']
+        #tout.shape (1802, 300, 2)
+        #tstim.shape (1802, 300, 7)
         # rotate output matrix if perturbation type is VR (2)
-        if perturbation==2:
+        if perturbation_type == 2:
             rot_phi = params['model']['rot_phi']
             rotmat = np.array([[np.cos(rot_phi),-np.sin(rot_phi)],
                                 [np.sin(rot_phi),np.cos(rot_phi)]])
@@ -113,44 +125,48 @@ def main(name='test'):
                                             state_dict['output.weight']
             model.load_state_dict(state_dict, strict=True)
         # convert to pytorch form
-        target = torch.zeros(training_trials, params['model']['tsteps'], 
-            params['model']['batch_size'], params['model']['output_dim']).type(dtype)
-        stimulus = torch.zeros(training_trials, params['model']['tsteps'], 
-            params['model']['batch_size'], tstim.shape[-1]).type(dtype)
-        pert = torch.zeros(training_trials, params['model']['tsteps'], 
-            params['model']['batch_size'], params['model']['output_dim']).type(dtype)
-        for j in range(training_trials):
+        tpl = n_training_trials, params['model']['tsteps'], params['model']['batch_size']
+        stimulus = torch.zeros(*tpl, tstim.shape[-1]).type(dtype)
+        pert     = torch.zeros(*tpl, params['model']['output_dim']).type(dtype)
+        # target is not used later (it is in fact contained in stimulus)
+        #target   = torch.zeros(*tpl, params['model']['output_dim']).type(dtype)
+
+        # population target and stimiulus with data and  
+        # prepare random velocity pert if necessary
+        for j in range(n_training_trials):
             idx = np.random.choice(range(tout.shape[0]),params['model']['batch_size'],
                                    replace=False)
-            target[j] = torch.Tensor(tout[idx].transpose(1,0,2)).type(dtype)
+            #target[j]   = torch.Tensor( tout[idx].transpose(1,0,2)).type(dtype)
             stimulus[j] = torch.Tensor(tstim[idx].transpose(1,0,2)).type(dtype)
             # insert perturbation if perturbation type is random push (1)
-            if perturbation==1:
+            if perturbation_type == 1:
                 pert[j] = perturb(pert[j],params['model']['batch_size'],params['p1'])
         # ACTUAL TRAINING STARTS
         lc = []
         model.train()
-        for epoch in range(training_trials): 
+        for epoch in range(n_training_trials): 
             toprint = OrderedDict()
             optimizer.zero_grad()
-            output,hidden = model(stimulus[epoch],pert[epoch])
-            loss_train = criterion(output, output*0).mean()
+            output,hidden   = model(stimulus[epoch],pert[epoch]) # runs forward
+            loss_train      = criterion(output, output*0).mean() # we compare output (errors per trial) with 0
             toprint['Loss'] = loss_train
             
             # add regularization
             # term 1: parameters
-            regin = params['model']['alpha1']*model.rnn.weight_ih_l0.norm(2)
-            regout = params['model']['alpha1']*model.output.weight.norm(2)
+            regin   = params['model']['alpha1']*model.rnn.weight_ih_l0.norm(2)
+            regout  = params['model']['alpha1']*model.output.weight.norm(2)
             regoutb = params['model']['alpha1']*model.output.bias.norm(2)
-            regfb = params['model']['alpha1']*model.feedback.weight.norm(2)
-            regfbb = params['model']['alpha1']*model.feedback.bias.norm(2)
-            regrec = params['model']['gamma1']*model.rnn.weight_hh_l0.norm(2)
-            toprint['In'] = regin
-            toprint['Rec'] = regrec
-            toprint['Out'] = regout
+            regfb   = params['model']['alpha1']*model.feedback.weight.norm(2)
+            regfbb  = params['model']['alpha1']*model.feedback.bias.norm(2)
+            regrec  = params['model']['gamma1']*model.rnn.weight_hh_l0.norm(2)
+
+            toprint['In']   = regin
+            toprint['Rec']  = regrec
+            toprint['Out']  = regout
             toprint['OutB'] = regoutb
-            toprint['Fb'] = regfb
-            toprint['FbB'] = regfbb
+            toprint['Fb']   = regfb
+            toprint['FbB']  = regfbb
+
             # term 2: rates
             regact = params['model']['beta1']*hidden.pow(2).mean() 
             toprint['Act'] = regact
@@ -165,23 +181,29 @@ def main(name='test'):
                                   regin.detach().item(), regrec.detach().item(),
                                   regout.detach().item(), regoutb.detach().item(),
                                   regfb.detach().item(), regfbb.detach().item()]
-            print(('Epoch=%d | '%(epoch)) +" | ".join("%s=%.4f"%(k, v) for \
+
+            if epoch % 10 == 0:
+                print(protocol[phase],('Epoch=%d | '%(epoch)) +" | ".join("%s=%.4f"%(k, v) for \
                                                       k, v in toprint.items()))
             lc.append(train_running_loss)       
+            # end of cycle over training epochs
+
         # save this phase
-        torch.save({'epoch': training_trials,
+        torch.save({'epoch': n_training_trials,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'lc':np.array(lc),
                     'params':params
                     }, savname / ('phase'+str(phase)+'_training'))
         print('MODEL TRAINED!')
+
         # test model
         model.eval()
-        test(model,data,params,str(savname / ('phase'+str(phase)+'_')),lc,
-                      dopert=0 if perturbation==2 else perturbation,
+        test(model,data_cur_phase,params,str(savname / ('phase'+str(phase)+'_')),lc,
+                      dopert=0 if perturbation_type==2 else perturbation_type,
                       dataC=dataB)
         print('MODEL TESTED!')
+        # end of cycle over phases
 
 if __name__ == "__main__":
     main()

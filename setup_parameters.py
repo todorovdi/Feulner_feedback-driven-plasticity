@@ -7,18 +7,22 @@ Defines experiment parameters.
 import numpy as np
 import os,shutil
 from pathlib import Path
+from os.path import join as pjoin
+dir = os.path.expandvars('$FEULNER_FEEDBACK_PLASTICITY_DATA')
+dir = Path(dir)
 
 def main(name='test',rand_seed=0):
     
     # NAME #################################
-    directory = Path.cwd() / 'results'
+    #directory = Path.cwd() / 'results'
+    directory = dir / 'results'
     name = name
     savname = directory / name
     
     if not os.path.exists(savname):
         os.mkdir(savname)
     else:
-        print('Simulation with that name already exists!')
+        print(f'Simulation with that name already exists! {savname}')
         return 0
         
     # MODEL #################################
@@ -62,6 +66,8 @@ def main(name='test',rand_seed=0):
     batch_size = 20
         
     # PROTOCOL ###############################
+    # perturbation code 1 means random velocity pert
+    # perturbation code 2 means VMR
     protocol = [ # dataID, perturbation, training_trials
             ['random',0,100], # first phase is always with static fb weights
             ['random',0,500],
@@ -80,7 +86,7 @@ def main(name='test',rand_seed=0):
     
     # DATA #################################
     ntrials = 2000
-    tsteps = 300
+    tsteps = 300 # number of timebins
     dt = 0.01
     output_dim = 4
     input_dim = 7

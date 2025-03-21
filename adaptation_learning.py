@@ -13,11 +13,14 @@ from modeldef import RNN,test
 import os
 from pathlib import Path
 
+dir = os.path.expandvars('$FEULNER_FEEDBACK_PLASTICITY_DATA')
+dir = Path(dir)
+
 def main(name='test',backprop=False, control=False, single_target=False,
              popto=False, popto_param=None, rot_sd=0):
     
     # LOAD PARAMETERS ###################
-    directory = Path.cwd() / 'results'
+    directory = dir / 'results'
     name = name
     savname = directory / name
         
