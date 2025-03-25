@@ -23,13 +23,28 @@ def _prepare_data(start_point,end_point,go_on,vel,tsteps,input_dim,
     go_to_peak (int): Number of time steps to reach the peak.
     stim_on (int): Time step at which the stimulus is turned on.
 
+    data dictionary according to the setup parameters :
+    {'ntrials': 2000,
+     'tsteps': 300,
+     'dt': 0.01,
+     'input_dim': 7,
+     'output_dim': 4,
+     'vel': 10,
+     'p_test': 0.1,
+     'go_to_peak': 50,
+     'stim_on': 20,
+     'random': {'output_range': [-6, 6], 'go_range': [70, 220]},
+     'center-out-reach': {'output_range': 5,
+     'ntargets': 8,
+     'go_range': [170, 220]}}
+
     Returns:
     tuple: A tuple containing:
         - target (np.ndarray): Target data for each trial, shape (ntrials, tsteps, output_dim).
             first two dimensions are the position, last two dimensions are the velocity
             !it is target data for every time bin, not just the endpoint
         - stimulus (np.ndarray): Stimulus data for each trial, shape (ntrials, tsteps, input_dim).
-            dim [5-7] = first two dimensions of target mvt (so position)
+            dim [5-6] = first two dimensions of target mvt (so position)
             dim [3-4] = last two dimensions of target mvt (so velolcity)
             dim [0-1] = beforfe stim_on it is zero, after stim_on it is end_point-start_point
             dim 2 = before go_on[k]-go_to_peak = 0, after = stim_range (hold signal)
