@@ -8,7 +8,9 @@ import numpy as np
 import os,shutil
 from pathlib import Path
 from os.path import join as pjoin
-dir = os.path.expandvars('$FEULNER_FEEDBACK_PLASTICITY_DATA')
+
+# dir = os.path.expandvars('$FEULNER_FEEDBACK_PLASTICITY_DATA')
+dir = os.getcwd()
 dir = Path(dir)
 
 def main(name='test',rand_seed=0):
@@ -18,6 +20,7 @@ def main(name='test',rand_seed=0):
     directory = dir / 'results'
     name = name
     savname = directory / name
+    print(savname)
     
     if not os.path.exists(savname):
         os.mkdir(savname)
