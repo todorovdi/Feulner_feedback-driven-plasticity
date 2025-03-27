@@ -14,28 +14,34 @@ class RNN(nn.Module):
                  fwd_delay, fb_delay=0, biolearning=False, noiseout=0, noisein=0,
                  nonlin='relu',fb_sparsity=1,noise_kernel_size=1, rec_sparsity=1):
         super(RNN, self).__init__()
-        self.n_neurons = n_neurons
-        self.n_inputs = n_inputs
-        self.n_outputs = n_outputs
-        self.alpha = alpha
-        self.dt = dt
+        self.n_neurons = n_neurons #400
+        self.n_inputs = n_inputs #3
+        self.n_outputs = n_outputs #2
+        self.alpha = alpha #0.20
+        self.dt = dt #0.01
         
-        self.rnn = nn.RNN(n_inputs, n_neurons, num_layers=2, bias=False) 
-        self.output = nn.Linear(n_neurons, n_outputs)
-        self.feedback = nn.Linear(n_outputs, n_neurons)
+        self.rnn = nn.RNN(n_inputs, n_neurons, num_layers=2, bias=False) #(3,400,2)
+        self.output = nn.Linear(n_neurons, n_outputs) #(400,2)
+        self.feedback = nn.Linear(n_outputs, n_neurons) #(2,400)
         self.dtype = dtype
         
-        self.fwd_delay = fwd_delay # delay from neural activity to mvt exect
-        self.fb_delay = fb_delay
-        self.delay = fwd_delay+fb_delay
+        self.fwd_delay = fwd_delay # delay from neural activity to movement execution, 2
+        self.fb_delay = fb_delay # feedback delay 10
+        self.delay = fwd_delay+fb_delay # total delay, 10+2 = 12
         
-        self.biolearning = biolearning
+
+        self.biolearning = biolearning #choosing biolearning 
+
+        # if biolearning is true, then the recurrent weights (rnn.weight_hh_l0) are not directly trained by backpropagation
         if biolearning:
             self.rnn.weight_hh_l0.requires_grad = False
-        self.noisein = noisein
-        self.noiseout = noiseout  # amplitude of noise added to output velocity
-        self.noise_kernel_lenk = noise_kernel_size
+
         
+        self.noisein = noisein # amplitute of noise added to input, 0
+        self.noiseout = noiseout  # amplitude of noise added to output velocity, 0 
+        self.noise_kernel_lenk = noise_kernel_size # kernel size 5. Convolution used?
+        
+        # choosing nonlienearity to be used 
         if nonlin=='relu':
             self.nonlin = torch.nn.ReLU()
         elif nonlin=='tanh':
@@ -44,54 +50,92 @@ class RNN(nn.Module):
             self.nonlin = torch.nn.Sigmoid()
 
         # mask for feedback weights, zeros or ones
-        self.mask = nn.Linear(n_outputs, n_neurons, bias=False) 
+        # depends on fb_sparsity, determines sparsity of feedback connections
+        # it is a non trainable parameter is grad is false
+        self.mask = nn.Linear(n_outputs, n_neurons, bias=False) # (2,400) 
         self.mask.weight = nn.Parameter((torch.rand(n_neurons, n_outputs) < fb_sparsity).float()).type(dtype)
         self.mask.weight.requires_grad = False
 
         # mask for recurrent weights, zeros or ones
+        # depends on rec_sparsity, determines sparsity of recurrent connections
+        # it is a non trainable parameter as grad is false
         self.mask2 = nn.Linear(n_neurons, n_neurons, bias=False) 
         self.mask2.weight = nn.Parameter((torch.rand(n_neurons, n_neurons) < rec_sparsity).float()).type(dtype)
         self.mask2.weight.requires_grad = False
 
     def init_hidden(self):
+        # if batch size 20, neurons 400 then it gives a 
+        # 20 x 400 shape tensor. Each row has 400 values 
+        # between (-0.1, 0.1). Used to initialize the hidden state
         return ((torch.rand(self.batch_size, self.n_neurons)-0.5)*0.2).type(self.dtype)
     
     # ONE SIMULATION STEP
     def f_step(self,xin,x1,r1,v1fb,v1,vel_pert_ext,popto):
         '''
         simulates one time bin step (a sub-part of a trial)
+        Meaning in a trial if there are 300 time steps, this function
+        simulates 1 time step until it iterates over 300 time steps
+
         in all of the arguments shape[0] = batch_size
 
         xin  input   .shape torch.Size([20, 7])
         x1   current hidden net input (pre-activation)   torch.Size([20, 400])
         r1   current hidden activation   torch.Size([20, 400])
-        v1fb feedback (2D coordintes of the _error_   torch.Size([20, 2])
+        v1fb feedback (2D coordintes of the error torch.Size([20, 2])
         v1   current velocity(?)  shape torch.Size([20, 2])
+        vel_per_ext external perturbation applied to velocity shape (20,2)
         pin  pertrubation of velocity in current timebin shape = (20, 2)
-        popto.shape torch.Size([20, 400])
+        popto perturbation of the neural activity (pre-synaptic) shape torch.Size([20, 400])
 
         returns x1,r1,v1
+            x1 shape is (20, 400)
             r1.shape torch.Size([20, 400])
             v1  -- will be saved in poserr, shape=torch.Size([20, 2])
         '''
 
-        # xin
+        # xin is the input from the "stiumulus" dataset
+        # xin col 0,1 = (endpoint_x - startpoint_x), (endpoint_y - startpoint_y)
+        # xin col 2 = stim range flag. Only active until go_on signal occurs
+        # xin col 3,4 = the "perfect" velocity_x and velocity_y to reach endpoint
+        # xin col 5,6 = the "perfect" trajectory of x,y coordinate moves to reach endpoint
+          
         # dim [0-1] = beforfe stim_on it is zero, after stim_on it is end_point-start_point
         # dim 2 = before go_on[k]-go_to_peak = 0, after = stim_range (hold signal)
+
         perceived_signals = xin[:,:3]
-        x1 = x1 + self.alpha*(-x1 + r1 @ (self.mask2.weight*self.rnn.weight_hh_l0).T 
+
+        # FORMULA:
+        # 1.    - sparse rnn hidden weights with mask2 matrix, then transpose it
+        #       - matmul the transposed hidden weight matrix with current hidden activation
+
+        # 2.    - Transpose input hidden weight matrix
+        #       - Matmul hiddden weight matrix with first 3 cols of "stimulus"
+
+        # 3.    - Sparse the feedback weight matrix with mask1 matrix
+        #       - Matmul the sparsed feedback weight matrix with current velocity error matrix
+
+        # 4.    - (1+2+3+ bias of feedback + velocity perturbation - current hidden net input)
+        # 5.    - Multiply 4 with alpha, then add current hidden net input 
+        x1 = x1 + self.alpha*(-x1 + r1 @ (self.mask2.weight*self.rnn.weight_hh_l0).T
                                   + perceived_signals @ self.rnn.weight_ih_l0.T
                                   + v1fb @ (self.mask.weight*self.feedback.weight).T 
                                   + self.feedback.bias.T
                                   + popto
                               )
+        
+        # 6.    - Apply nonlinearity to (5)
         r1 = self.nonlin(x1)
-        # velocity at the current time point
+
+        # 7.    - Decode the velocity using the output layer, add velocity perturbation to decoded velocity
         vt = self.output(r1) + vel_pert_ext # vt.shape torch.Size([20, 2])
+
 
         # xin[:,3:5] = last two dimensions of target mvt (so velolcity)
         # v1 is the accumulated (signed) mismatch between the target and the actual velocity
-        v1_upd = v1 + self.dt*(xin[:,3:5]-vt) # will be added to poserr   
+
+        # 8. Calculate current velocity error, multiply with time step, add to 7 ("produced" velocity)
+        v1_upd = v1 + self.dt*(xin[:,3:5]-vt) # will be added to poserr 
+
         return x1,r1,v1_upd
     
     # BIOLOGICALLY PLAUSIBLE LEARNING RULE
@@ -100,10 +144,11 @@ class RNN(nn.Module):
             return self.alpha*0.1*(
                 + lr*self.mask2.weight*torch.outer(fb@(self.mask.weight*self.feedback.weight).T,presum)
                 )
-
                     
     # GET VELOCITY OUTPUT (NOT ERROR)
     def get_output(self,testl1):
+
+        # is testl1 of (shape 20x400)?
         if self.noiseout>0:
             return self.output(testl1)+self.output(testl1)*self.create_noise(testl1)
         else:
@@ -120,32 +165,39 @@ class RNN(nn.Module):
         lenk = self.noise_kernel_lenk
         kernel = torch.ones(2,tmp.shape[1],lenk)/lenk
         padding = lenk // 2 + lenk % 2
+
+        # noise smoothing with 1D convolution
         noise = torch.nn.functional.conv1d(tmp, kernel, padding=padding)[:,:,:testl1.shape[0]]
         noise = noise.permute(2,0,1)*np.sqrt(lenk)  
         return noise
     
     # RUN MODEL
-    def forward(self, X, Xpert, 
-            lr=1e-3, popto=None):
+    def forward(self, X, Xpert, lr=1e-3, popto=None):
         '''
-        X is "stimulus" or "input", Xpert is perturbation
-        # X.shape     = 300x20x7  = time x batch x input_dim
-        # Xpert.shape = 300x20x2 = velocity pertrubations 
-        # popto = perturbation of the neural activty (pre synaptic), used in adaptation_learning.py only
+        X is "stimulus" or "input", 
+        Xpert is perturbation
+        X.shape     = 300x20x7  = time x batch x input_dim
+        Xpert.shape = 300x20x2 = velocity pertrubations 
+        popto = perturbation of the neural activty (pre synaptic), used in adaptation_learning.py only
 
-        each forward run is simulation of the entire single trial
+        each forward run is simulation of the entire single trial, meaning over 300 times steps 
         '''
-        self.batch_size = X.size(1)
-        # init the hidden state with random values 
+
+        self.batch_size = X.size(1) # 20
+
+        # init the hidden state with random 
         hidden0 = self.init_hidden() # shape = batch x n_neurons
-        x1 = hidden0
-        r1 = self.nonlin(x1) # shape = batch x n_neurons (20x400)
-        v1 = self.output(r1) # shape = batch x n_output (=2)
+
+        x1 = hidden0         # random values between (-0.1, 0.1), shape is (20 x 400) 
+        r1 = self.nonlin(x1) # activation function, likely relu shape = batch x n_neurons (20x400)
+        v1 = self.output(r1) # outputs, shape = batch x n_output (=20 x 2)
+
         hidden1 = []
         poserr = []
         presum = r1
         dw_acc = torch.zeros(self.rnn.weight_hh_l0.shape) # 400 x 400
 
+        ######## SKIP FOR NOW
         if popto is None:
             popto = torch.zeros((X.shape[0],X.shape[1],r1.shape[1])) # 300 x batch x 400
 
