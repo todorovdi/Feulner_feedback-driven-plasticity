@@ -7,7 +7,7 @@ Toolbox for data creation.
 import numpy as np
 
 def _prepare_data(start_point,end_point,go_on,vel,tsteps,input_dim,
-                  output_dim,dt,stim_range,go_to_peak,stim_on):
+                  output_dim,dt,stim_range,go_to_peak,stim_on,transition=1):
     """
     Prepare data for RNN training by generating target and stimulus arrays.
     Parameters:
@@ -66,7 +66,8 @@ def _prepare_data(start_point,end_point,go_on,vel,tsteps,input_dim,
         # for each trial, last two dim after go_on is just standing at end point
         target[j,(go_on[j]+go_to_peak):,:2] = end_point[j]  
         # for each trial, last two dim around go_to_peak is defined by sigmoid
-        target[j,(go_on[j]-go_to_peak):(go_on[j]+go_to_peak),:2] += \
+        if transition:
+            target[j,(go_on[j]-go_to_peak):(go_on[j]+go_to_peak),:2] += \
                 ytemp[:,None]*(end_point[j]-start_point[j])[None,:]
     
     # add target velocity
@@ -74,8 +75,8 @@ def _prepare_data(start_point,end_point,go_on,vel,tsteps,input_dim,
     
     # create stimulus
     stimulus = np.zeros((ntrials,tsteps,input_dim))
-    stimulus[:,:,3:5] = target[:,:,2:]
-    stimulus[:,:,5:] = target[:,:,:2]
+    stimulus[:,:,3:5] = target[:,:,2:].copy()
+    stimulus[:,:,5:]  = target[:,:,:2].copy()
     for j in range(ntrials):
         stimulus[j,stim_on:,:2] = end_point[j]-start_point[j] # visible endpoint position signal
         stimulus[j,:(go_on[j]-go_to_peak),2] = stim_range # hold signal
@@ -119,7 +120,7 @@ def create_data_velocity_random(data_params):
     print('RANDOM REACH DATASET CONSTRUCTED!')
     return data
 
-def create_data_velocity_centeroutreach(data):
+def create_data_velocity_centeroutreach(data, transition=1):
     # PARAMS #################################
     ntrials = data['ntrials']
     tsteps = data['tsteps']
@@ -144,7 +145,7 @@ def create_data_velocity_centeroutreach(data):
     
     target,stimulus = _prepare_data(start_point, end_point, go_on, vel, tsteps,
                                     input_dim,output_dim,dt,output_range,
-                                    go_to_peak,stim_on)
+                                    go_to_peak,stim_on,transition=transition)
 
     # create testset
     test_idx = np.random.rand(ntrials)<p_test
